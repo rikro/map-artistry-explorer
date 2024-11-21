@@ -6,7 +6,7 @@ export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: goo
     const service = new google.maps.places.PlacesService(map);
     const request = {
       bounds: bounds,
-      type: 'route' // Changed from ['route'] to 'route' to match PlaceSearchRequest type
+      type: 'route'
     };
     
     service.nearbySearch(request, (results) => {
@@ -25,8 +25,10 @@ export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: goo
         const x = ((location.lng() - sw.lng()) / (ne.lng() - sw.lng())) * width;
         const y = ((location.lat() - sw.lat()) / (ne.lat() - sw.lat())) * height;
         
+        // Create a longer line for the street
+        const streetLength = 100; // Adjust this value to make streets longer/shorter
         return {
-          path: `M ${x-50} ${y} L ${x+50} ${y}`,
+          path: `M ${x - streetLength} ${y} L ${x + streetLength} ${y}`,
           name: place.name || ''
         };
       }).filter((street): street is {path: string, name: string} => street !== null);
@@ -67,11 +69,18 @@ export const downloadSVG = async (
 ) => {
   const svgContent = `
     <svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        ${streets.map((street, i) => `
+          <path id="street-path-${i}" d="${street.path}" />
+        `).join('')}
+      </defs>
+      
       <path d="${svgString}" fill="none" stroke="black" stroke-width="2"/>
-      ${streets.map(street => `
-        <path d="${street.path}" stroke="gray" stroke-width="1"/>
+      
+      ${streets.map((street, i) => `
+        <use href="#street-path-${i}" stroke="gray" stroke-width="1"/>
         <text>
-          <textPath href="#${street.name.replace(/\s+/g, '-')}" startOffset="50%">
+          <textPath href="#street-path-${i}" startOffset="50%" text-anchor="middle">
             ${street.name}
           </textPath>
         </text>
