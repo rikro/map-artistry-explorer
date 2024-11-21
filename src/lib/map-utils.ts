@@ -2,51 +2,84 @@ export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: goo
   const bounds = new google.maps.LatLngBounds();
   polygon.getPath().forEach(point => bounds.extend(point));
   
-  return new Promise((resolve) => {
-    const service = new google.maps.places.PlacesService(map);
-    const request = {
-      bounds: bounds,
-      type: 'route'
-    };
-    
-    service.nearbySearch(request, async (results) => {
-      if (!results) return resolve([]);
-      
-      const streets = await Promise.all(results.map(async (place) => {
-        if (!place.geometry?.location || !place.name) return null;
-        
-        const location = place.geometry.location;
-        const ne = bounds.getNorthEast();
-        const sw = bounds.getSouthWest();
-        const width = 800;
-        const height = 600;
-        
-        // Convert location to SVG coordinates
-        const x = ((location.lng() - sw.lng()) / (ne.lng() - sw.lng())) * width;
-        const y = ((location.lat() - sw.lat()) / (ne.lat() - sw.lat())) * height;
-        
-        // Create a path that represents the street direction based on viewport
-        const heading = place.geometry.viewport ? 
-          google.maps.geometry.spherical.computeHeading(
-            place.geometry.viewport.getSouthWest(),
-            place.geometry.viewport.getNorthEast()
-          ) : 0;
-        
-        // Calculate end points for the street line based on heading
-        const length = 200;
-        const angle = (heading * Math.PI) / 180;
-        const dx = Math.cos(angle) * length;
-        const dy = Math.sin(angle) * length;
-        
-        return {
-          path: `M ${x - dx/2} ${y - dy/2} L ${x + dx/2} ${y + dy/2}`,
-          name: place.name
-        };
-      }));
-      
-      resolve(streets.filter((street): street is {path: string, name: string} => street !== null));
+  // Get a grid of points within the polygon bounds
+  const ne = bounds.getNorthEast();
+  const sw = bounds.getSouthWest();
+  const latStep = (ne.lat() - sw.lat()) / 5;
+  const lngStep = (ne.lng() - sw.lng()) / 5;
+  
+  const points: google.maps.LatLng[] = [];
+  for (let lat = sw.lat(); lat <= ne.lat(); lat += latStep) {
+    for (let lng = sw.lng(); lng <= ne.lng(); lng += lngStep) {
+      const point = new google.maps.LatLng(lat, lng);
+      if (google.maps.geometry.poly.containsLocation(point, polygon)) {
+        points.push(point);
+      }
+    }
+  }
+  
+  // Use Roads API to snap points to roads
+  const service = new google.maps.RoadsService();
+  try {
+    const response = await service.snapToRoads({
+      path: points,
+      interpolate: true
     });
-  });
+
+    if (!response || !response.snappedPoints) return [];
+
+    // Group snapped points by placeId to form continuous road segments
+    const roadSegments = new Map<string, google.maps.LatLng[]>();
+    response.snappedPoints.forEach(point => {
+      if (!point.placeId) return;
+      
+      const segment = roadSegments.get(point.placeId) || [];
+      segment.push(point.location);
+      roadSegments.set(point.placeId, segment);
+    });
+
+    // Convert road segments to SVG paths
+    const width = 800;
+    const height = 600;
+    const streets: Array<{path: string, name: string}> = [];
+
+    for (const [placeId, points] of roadSegments) {
+      if (points.length < 2) continue;
+
+      let svgPath = '';
+      points.forEach((point, i) => {
+        const x = ((point.lng() - sw.lng()) / (ne.lng() - sw.lng())) * width;
+        const y = ((point.lat() - sw.lat()) / (ne.lat() - sw.lat())) * height;
+        svgPath += `${i === 0 ? 'M' : 'L'} ${x} ${y} `;
+      });
+
+      // Get road name using Geocoder
+      const geocoder = new google.maps.Geocoder();
+      const result = await new Promise<google.maps.GeocoderResult | null>((resolve) => {
+        geocoder.geocode({ location: points[Math.floor(points.length / 2)] }, (results, status) => {
+          if (status === 'OK' && results && results[0]) {
+            resolve(results[0]);
+          } else {
+            resolve(null);
+          }
+        });
+      });
+
+      const streetName = result?.address_components?.find(
+        component => component.types.includes('route')
+      )?.long_name || 'Unknown Street';
+
+      streets.push({
+        path: svgPath,
+        name: streetName
+      });
+    }
+
+    return streets;
+  } catch (error) {
+    console.error('Roads API error:', error);
+    return [];
+  }
 };
 
 export const downloadSVG = async (
