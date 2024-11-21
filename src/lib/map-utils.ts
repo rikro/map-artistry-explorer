@@ -9,31 +9,46 @@ export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: goo
       type: 'route'
     };
     
-    service.nearbySearch(request, (results) => {
+    service.nearbySearch(request, async (results) => {
       if (!results) return resolve([]);
       
-      const streets = results.map(place => {
-        const location = place.geometry?.location;
-        if (!location) return null;
+      const streets = await Promise.all(results.map(async (place) => {
+        if (!place.geometry?.location || !place.name) return null;
         
-        // Convert to SVG coordinates
+        // Get detailed place information to get the road geometry
+        const detailedPlace = await new Promise<google.maps.places.PlaceResult>((resolve) => {
+          service.getDetails({
+            placeId: place.place_id!,
+            fields: ['geometry', 'name']
+          }, (result) => {
+            resolve(result || place);
+          });
+        });
+        
         const ne = bounds.getNorthEast();
         const sw = bounds.getSouthWest();
         const width = 800;
         const height = 600;
         
+        // Convert location to SVG coordinates
+        const location = detailedPlace.geometry?.location;
+        if (!location) return null;
+        
         const x = ((location.lng() - sw.lng()) / (ne.lng() - sw.lng())) * width;
         const y = ((location.lat() - sw.lat()) / (ne.lat() - sw.lat())) * height;
         
-        // Create a longer line for the street
-        const streetLength = 100; // Adjust this value to make streets longer/shorter
+        // Create a curved path for visual interest
+        const controlPoint1X = x - 100;
+        const controlPoint2X = x + 100;
+        const controlPointY = y - 30;
+        
         return {
-          path: `M ${x - streetLength} ${y} L ${x + streetLength} ${y}`,
-          name: place.name || ''
+          path: `M ${x - 150} ${y} Q ${controlPoint1X} ${controlPointY} ${x} ${y} T ${x + 150} ${y}`,
+          name: detailedPlace.name || ''
         };
-      }).filter((street): street is {path: string, name: string} => street !== null);
+      }));
       
-      resolve(streets);
+      resolve(streets.filter((street): street is {path: string, name: string} => street !== null));
     });
   });
 };
@@ -42,16 +57,13 @@ export const polygonToSVGPath = (polygon: google.maps.Polygon): string => {
   const path = polygon.getPath();
   const bounds = new google.maps.LatLngBounds();
   
-  // Get bounds
   path.forEach((point) => bounds.extend(point));
   
-  // Calculate SVG viewport
   const ne = bounds.getNorthEast();
   const sw = bounds.getSouthWest();
   const width = 800;
   const height = 600;
   
-  // Convert coordinates to SVG points
   let svgPoints = '';
   path.forEach((point, i) => {
     const x = ((point.lng() - sw.lng()) / (ne.lng() - sw.lng())) * width;
@@ -75,15 +87,15 @@ export const downloadSVG = async (
         `).join('')}
       </defs>
       
-      <path d="${svgString}" fill="none" stroke="black" stroke-width="2"/>
-      
       ${streets.map((street, i) => `
-        <use href="#street-path-${i}" stroke="gray" stroke-width="1"/>
-        <text>
-          <textPath href="#street-path-${i}" startOffset="50%" text-anchor="middle">
-            ${street.name}
-          </textPath>
-        </text>
+        <g class="street">
+          <use href="#street-path-${i}" stroke="black" stroke-width="1.5"/>
+          <text>
+            <textPath href="#street-path-${i}" startOffset="50%" text-anchor="middle" fill="black">
+              ${street.name}
+            </textPath>
+          </text>
+        </g>
       `).join('')}
     </svg>
   `;
