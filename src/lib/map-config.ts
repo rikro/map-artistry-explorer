@@ -1,4 +1,4 @@
-export const libraries: ("drawing" | "geometry" | "places")[] = ["drawing", "geometry"];
+export const libraries: ("drawing" | "geometry" | "places")[] = ["drawing", "geometry", "places"];
 
 export const mapStyles = [
   {

@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { GoogleMap, DrawingManager } from '@react-google-maps/api';
 import { toast } from 'sonner';
-import { polygonToSVGPath, downloadSVG } from '@/lib/map-utils';
+import { polygonToSVGPath, downloadSVG, getStreetsInPolygon } from '@/lib/map-utils';
 import MapControls from './MapControls';
 
 interface MapContainerProps {
@@ -10,9 +10,15 @@ interface MapContainerProps {
 }
 
 const MapContainer = ({ center, onMapLoad }: MapContainerProps) => {
+  const [map, setMap] = useState<google.maps.Map | null>(null);
   const [drawingManager, setDrawingManager] = useState<google.maps.drawing.DrawingManager | null>(null);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [currentPolygon, setCurrentPolygon] = useState<google.maps.Polygon | null>(null);
+
+  const handleMapLoad = useCallback((map: google.maps.Map) => {
+    setMap(map);
+    onMapLoad(map);
+  }, [onMapLoad]);
 
   const handleDrawingComplete = useCallback((polygon: google.maps.Polygon) => {
     setCurrentPolygon(polygon);
@@ -30,22 +36,21 @@ const MapContainer = ({ center, onMapLoad }: MapContainerProps) => {
     drawingManager?.setDrawingMode(null);
   }, [drawingManager]);
 
-  const exportSVG = useCallback(() => {
-    if (!currentPolygon) {
+  const exportSVG = useCallback(async () => {
+    if (!currentPolygon || !map) {
       toast.error('Please define an area first');
       return;
     }
 
-    const svgPath = polygonToSVGPath(currentPolygon);
-    const svgContent = `
-      <svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
-        <path d="${svgPath}" fill="none" stroke="black" stroke-width="2"/>
-      </svg>
-    `;
-    
-    downloadSVG(svgContent, 'map-design.svg');
-    toast.success('Design exported successfully!');
-  }, [currentPolygon]);
+    try {
+      const svgPath = polygonToSVGPath(currentPolygon);
+      const streets = await getStreetsInPolygon(currentPolygon, map);
+      await downloadSVG(svgPath, 'map-design.svg', streets);
+      toast.success('Design exported successfully!');
+    } catch (error) {
+      toast.error('Failed to export design');
+    }
+  }, [currentPolygon, map]);
 
   return (
     <div className="relative">
@@ -59,7 +64,7 @@ const MapContainer = ({ center, onMapLoad }: MapContainerProps) => {
           zoomControl: true,
           scrollwheel: true,
         }}
-        onLoad={onMapLoad}
+        onLoad={handleMapLoad}
       >
         <DrawingManager
           onLoad={setDrawingManager}
