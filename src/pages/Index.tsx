@@ -3,9 +3,7 @@ import { LoadScript } from '@react-google-maps/api';
 import { toast } from 'sonner';
 import LocationSearch from '@/components/LocationSearch';
 import MapContainer from '@/components/MapContainer';
-import { libraries } from '@/lib/map-config';
-
-const GOOGLE_MAPS_API_KEY = 'AIzaSyAMWvfYlI_zCJiU70UujsQctoKbBpFWg-w';
+import { libraries, GOOGLE_MAPS_API_KEY } from '@/lib/map-config';
 
 const Index = () => {
   const [map, setMap] = useState<google.maps.Map | null>(null);
@@ -20,6 +18,17 @@ const Index = () => {
     map?.panTo(location);
     toast.success('Location found!');
   }, [map]);
+
+  if (!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === 'YOUR_API_KEY_HERE') {
+    return (
+      <div className="min-h-screen p-4 flex items-center justify-center">
+        <div className="text-center space-y-2">
+          <h1 className="text-2xl font-bold text-red-600">Configuration Error</h1>
+          <p>Google Maps API key is not configured.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen p-4 space-y-4">
