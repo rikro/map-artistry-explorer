@@ -15,42 +15,75 @@ export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: goo
       const streets = await Promise.all(results.map(async (place) => {
         if (!place.geometry?.location || !place.name) return null;
         
-        // Get detailed place information to get the road geometry
-        const detailedPlace = await new Promise<google.maps.places.PlaceResult>((resolve) => {
-          service.getDetails({
-            placeId: place.place_id!,
-            fields: ['geometry', 'name']
-          }, (result) => {
-            resolve(result || place);
-          });
-        });
-        
+        const location = place.geometry.location;
         const ne = bounds.getNorthEast();
         const sw = bounds.getSouthWest();
         const width = 800;
         const height = 600;
         
         // Convert location to SVG coordinates
-        const location = detailedPlace.geometry?.location;
-        if (!location) return null;
-        
         const x = ((location.lng() - sw.lng()) / (ne.lng() - sw.lng())) * width;
         const y = ((location.lat() - sw.lat()) / (ne.lat() - sw.lat())) * height;
         
-        // Create a curved path for visual interest
-        const controlPoint1X = x - 100;
-        const controlPoint2X = x + 100;
-        const controlPointY = y - 30;
+        // Create a path that represents the street direction based on viewport
+        const heading = place.geometry.viewport ? 
+          google.maps.geometry.spherical.computeHeading(
+            place.geometry.viewport.getSouthWest(),
+            place.geometry.viewport.getNorthEast()
+          ) : 0;
+        
+        // Calculate end points for the street line based on heading
+        const length = 200;
+        const angle = (heading * Math.PI) / 180;
+        const dx = Math.cos(angle) * length;
+        const dy = Math.sin(angle) * length;
         
         return {
-          path: `M ${x - 150} ${y} Q ${controlPoint1X} ${controlPointY} ${x} ${y} T ${x + 150} ${y}`,
-          name: detailedPlace.name || ''
+          path: `M ${x - dx/2} ${y - dy/2} L ${x + dx/2} ${y + dy/2}`,
+          name: place.name
         };
       }));
       
       resolve(streets.filter((street): street is {path: string, name: string} => street !== null));
     });
   });
+};
+
+export const downloadSVG = async (
+  svgString: string,
+  filename: string,
+  streets: Array<{path: string, name: string}>
+) => {
+  const svgContent = `
+    <svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        ${streets.map((street, i) => `
+          <path id="street-path-${i}" d="${street.path}" />
+        `).join('')}
+      </defs>
+      
+      ${streets.map((street, i) => `
+        <g class="street">
+          <use href="#street-path-${i}" stroke="black" stroke-width="2"/>
+          <text>
+            <textPath href="#street-path-${i}" startOffset="50%" text-anchor="middle" fill="black" font-size="12">
+              ${street.name}
+            </textPath>
+          </text>
+        </g>
+      `).join('')}
+    </svg>
+  `;
+  
+  const blob = new Blob([svgContent], { type: 'image/svg+xml' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 };
 
 export const polygonToSVGPath = (polygon: google.maps.Polygon): string => {
@@ -72,41 +105,4 @@ export const polygonToSVGPath = (polygon: google.maps.Polygon): string => {
   });
   
   return svgPoints + 'Z';
-};
-
-export const downloadSVG = async (
-  svgString: string,
-  filename: string,
-  streets: Array<{path: string, name: string}>
-) => {
-  const svgContent = `
-    <svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        ${streets.map((street, i) => `
-          <path id="street-path-${i}" d="${street.path}" />
-        `).join('')}
-      </defs>
-      
-      ${streets.map((street, i) => `
-        <g class="street">
-          <use href="#street-path-${i}" stroke="black" stroke-width="1.5"/>
-          <text>
-            <textPath href="#street-path-${i}" startOffset="50%" text-anchor="middle" fill="black">
-              ${street.name}
-            </textPath>
-          </text>
-        </g>
-      `).join('')}
-    </svg>
-  `;
-  
-  const blob = new Blob([svgContent], { type: 'image/svg+xml' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
 };
