@@ -6,7 +6,7 @@ export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: goo
     const service = new google.maps.places.PlacesService(map);
     const request = {
       bounds: bounds,
-      type: ['route']
+      type: 'route' // Changed from ['route'] to 'route' to match PlaceSearchRequest type
     };
     
     service.nearbySearch(request, (results) => {
