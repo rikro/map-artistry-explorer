@@ -19,7 +19,7 @@ const Index = () => {
     toast.success('Location found!');
   }, [map]);
 
-  if (!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === 'YOUR_API_KEY_HERE') {
+  if (!GOOGLE_MAPS_API_KEY) {
     return (
       <div className="min-h-screen p-4 flex items-center justify-center">
         <div className="text-center space-y-2">

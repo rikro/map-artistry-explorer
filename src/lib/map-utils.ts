@@ -23,37 +23,36 @@ export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: goo
       lng: point.lng()
     }));
 
-    // Use the correct Roads API service
-    const response = await new Promise<google.maps.roads.SnappedPointResponse[]>((resolve, reject) => {
-      const service = new google.maps.RoadService();
-      service.snapToRoads({
-        path: path,
-        interpolate: true
-      }, (result, status) => {
-        if (status === 'OK' && result) {
-          resolve(result);
-        } else {
-          reject(new Error(`Roads API error: ${status}`));
-        }
-      });
-    });
-
-    if (!response) return [];
-
-    // Group snapped points by placeId to form continuous road segments
+    // Use the standard Places Service instead of Roads API
+    const service = new google.maps.places.PlacesService(map);
     const roadSegments = new Map<string, google.maps.LatLng[]>();
-    response.forEach(point => {
-      if (!point.placeId) return;
-      
-      const segment = roadSegments.get(point.placeId) || [];
-      segment.push(new google.maps.LatLng(
-        point.location.latitude,
-        point.location.longitude
-      ));
-      roadSegments.set(point.placeId, segment);
-    });
 
-    // Convert road segments to SVG paths
+    // Process points in chunks to avoid rate limiting
+    for (let i = 0; i < points.length; i++) {
+      const point = points[i];
+      const request = {
+        location: point,
+        radius: 50,
+        types: ['route']
+      };
+
+      const result = await new Promise<google.maps.places.PlaceResult[]>((resolve, reject) => {
+        service.nearbySearch(request, (results, status) => {
+          if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+            resolve(results);
+          } else {
+            resolve([]);
+          }
+        });
+      });
+
+      if (result.length > 0 && result[0].place_id) {
+        const segment = roadSegments.get(result[0].place_id) || [];
+        segment.push(point);
+        roadSegments.set(result[0].place_id, segment);
+      }
+    }
+
     const width = 800;
     const height = 600;
     const streets: Array<{path: string, name: string}> = [];
@@ -91,7 +90,7 @@ export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: goo
 
     return streets;
   } catch (error) {
-    console.error('Roads API error:', error);
+    console.error('Error processing streets:', error);
     return [];
   }
 };
