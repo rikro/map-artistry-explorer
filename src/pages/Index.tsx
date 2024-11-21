@@ -5,7 +5,7 @@ import LocationSearch from '@/components/LocationSearch';
 import MapContainer from '@/components/MapContainer';
 import { libraries } from '@/lib/map-config';
 
-const GOOGLE_MAPS_API_KEY = 'AIzaSyDGzMpB3j0U5b7Mc87-1lNI-f4cQZtszek';
+const GOOGLE_MAPS_API_KEY = 'AIzaSyAMWvfYlI_zCJiU70UujsQctoKbBpFWg';
 
 const Index = () => {
   const [map, setMap] = useState<google.maps.Map | null>(null);

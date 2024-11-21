@@ -18,15 +18,29 @@ export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: goo
     }
   }
   
-  // Use Roads API to snap points to roads
-  const service = new google.maps.RoadsService();
   try {
-    const response = await service.snapToRoads({
-      path: points,
-      interpolate: true
+    // Convert points array to path parameter format
+    const path = points.map(point => ({
+      latitude: point.lat(),
+      longitude: point.lng()
+    }));
+
+    // Use Roads API to snap points to roads
+    const response = await new Promise<google.maps.roads.SnapToRoadsResponse>((resolve, reject) => {
+      const service = new google.maps.RoadService();
+      service.snapToRoads({
+        path: path,
+        interpolate: true
+      }, (result, status) => {
+        if (status === 'OK' && result) {
+          resolve(result);
+        } else {
+          reject(new Error(`Roads API error: ${status}`));
+        }
+      });
     });
 
-    if (!response || !response.snappedPoints) return [];
+    if (!response.snappedPoints) return [];
 
     // Group snapped points by placeId to form continuous road segments
     const roadSegments = new Map<string, google.maps.LatLng[]>();
@@ -34,7 +48,7 @@ export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: goo
       if (!point.placeId) return;
       
       const segment = roadSegments.get(point.placeId) || [];
-      segment.push(point.location);
+      segment.push(new google.maps.LatLng(point.location.latitude, point.location.longitude));
       roadSegments.set(point.placeId, segment);
     });
 
