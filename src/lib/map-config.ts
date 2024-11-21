@@ -1,7 +1,7 @@
 export const libraries: ("drawing" | "geometry" | "places")[] = ["drawing", "geometry", "places"];
 
 // Replace this with your actual valid Google Maps API key
-export const GOOGLE_MAPS_API_KEY = process.env.VITE_GOOGLE_MAPS_API_KEY || '';
+export const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
 export const mapStyles = [
   {
