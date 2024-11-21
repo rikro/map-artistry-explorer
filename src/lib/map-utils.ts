@@ -21,17 +21,17 @@ export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: goo
   try {
     // Convert points array to path parameter format
     const path = points.map(point => ({
-      latitude: point.lat(),
-      longitude: point.lng()
+      lat: point.lat(),
+      lng: point.lng()
     }));
 
     // Use Roads API to snap points to roads
-    const response = await new Promise<google.maps.roads.SnapToRoadsResponse>((resolve, reject) => {
-      const service = new google.maps.RoadService();
+    const response = await new Promise<any>((resolve, reject) => {
+      const service = new google.maps.RoadsService();
       service.snapToRoads({
         path: path,
         interpolate: true
-      }, (result, status) => {
+      }, (result: any, status: string) => {
         if (status === 'OK' && result) {
           resolve(result);
         } else {
@@ -44,7 +44,7 @@ export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: goo
 
     // Group snapped points by placeId to form continuous road segments
     const roadSegments = new Map<string, google.maps.LatLng[]>();
-    response.snappedPoints.forEach(point => {
+    response.snappedPoints.forEach((point: any) => {
       if (!point.placeId) return;
       
       const segment = roadSegments.get(point.placeId) || [];
