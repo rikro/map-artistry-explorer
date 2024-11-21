@@ -2,7 +2,6 @@ export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: goo
   const bounds = new google.maps.LatLngBounds();
   polygon.getPath().forEach(point => bounds.extend(point));
   
-  // Get a grid of points within the polygon bounds
   const ne = bounds.getNorthEast();
   const sw = bounds.getSouthWest();
   const latStep = (ne.lat() - sw.lat()) / 5;
@@ -19,19 +18,18 @@ export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: goo
   }
   
   try {
-    // Convert points array to path parameter format
     const path = points.map(point => ({
       lat: point.lat(),
       lng: point.lng()
     }));
 
-    // Use Roads API to snap points to roads
-    const response = await new Promise<any>((resolve, reject) => {
-      const service = new google.maps.RoadsService();
+    // Use the correct Roads API service
+    const response = await new Promise<google.maps.roads.SnappedPointResponse[]>((resolve, reject) => {
+      const service = new google.maps.RoadService();
       service.snapToRoads({
         path: path,
         interpolate: true
-      }, (result: any, status: string) => {
+      }, (result, status) => {
         if (status === 'OK' && result) {
           resolve(result);
         } else {
@@ -40,15 +38,18 @@ export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: goo
       });
     });
 
-    if (!response.snappedPoints) return [];
+    if (!response) return [];
 
     // Group snapped points by placeId to form continuous road segments
     const roadSegments = new Map<string, google.maps.LatLng[]>();
-    response.snappedPoints.forEach((point: any) => {
+    response.forEach(point => {
       if (!point.placeId) return;
       
       const segment = roadSegments.get(point.placeId) || [];
-      segment.push(new google.maps.LatLng(point.location.latitude, point.location.longitude));
+      segment.push(new google.maps.LatLng(
+        point.location.latitude,
+        point.location.longitude
+      ));
       roadSegments.set(point.placeId, segment);
     });
 
@@ -67,7 +68,6 @@ export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: goo
         svgPath += `${i === 0 ? 'M' : 'L'} ${x} ${y} `;
       });
 
-      // Get road name using Geocoder
       const geocoder = new google.maps.Geocoder();
       const result = await new Promise<google.maps.GeocoderResult | null>((resolve) => {
         geocoder.geocode({ location: points[Math.floor(points.length / 2)] }, (results, status) => {

@@ -1,6 +1,6 @@
 export const libraries: ("drawing" | "geometry" | "places")[] = ["drawing", "geometry", "places"];
 
-export const GOOGLE_MAPS_API_KEY = process.env.VITE_GOOGLE_MAPS_API_KEY || 'YOUR_API_KEY_HERE';
+export const GOOGLE_MAPS_API_KEY = 'AIzaSyAMWvfYlI_zCJiU70UujsQctoKbBpFWg-w';
 
 export const mapStyles = [
   {
