@@ -1,3 +1,5 @@
+import paper from 'paper';
+
 export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: google.maps.Map): Promise<Array<{path: string, name: string}>> => {
   const bounds = new google.maps.LatLngBounds();
   polygon.getPath().forEach(point => bounds.extend(point));
@@ -5,8 +7,7 @@ export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: goo
   const ne = bounds.getNorthEast();
   const sw = bounds.getSouthWest();
   
-  // Create an even denser grid of points for better street detection
-  const gridSize = 100; // Increased for better coverage
+  const gridSize = 100;
   const latStep = (ne.lat() - sw.lat()) / gridSize;
   const lngStep = (ne.lng() - sw.lng()) / gridSize;
   
@@ -26,7 +27,7 @@ export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: goo
   for (const point of points) {
     const request = {
       location: point,
-      radius: 20, // Reduced radius for more precise detection
+      radius: 20,
       types: ['route']
     };
 
@@ -58,67 +59,46 @@ export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: goo
     }
   }
 
-  // Convert road segments to SVG paths using the map's projection
-  const width = 800;
-  const height = 600;
+  // Initialize Paper.js
+  paper.setup(new paper.Size(800, 600));
+  
   const streets: Array<{path: string, name: string}> = [];
-
   const projection = map.getProjection();
   if (!projection) return streets;
+
+  const mapBounds = map.getBounds();
+  if (!mapBounds) return streets;
+
+  const scale = Math.pow(2, map.getZoom() || 0);
+  const topRight = projection.fromLatLngToPoint(mapBounds.getNorthEast());
+  const bottomLeft = projection.fromLatLngToPoint(mapBounds.getSouthWest());
 
   for (const segments of roadSegments.values()) {
     if (segments.length < 2) continue;
 
-    // Sort points to create continuous paths
-    const sortedSegments = [segments[0]];
-    let remaining = segments.slice(1);
-
-    while (remaining.length > 0) {
-      const current = sortedSegments[sortedSegments.length - 1];
-      let closest = remaining[0];
-      let closestIndex = 0;
-      let minDist = Number.MAX_VALUE;
-
-      remaining.forEach((point, index) => {
-        const dist = Math.pow(point.lat - current.lat, 2) + Math.pow(point.lng - current.lng, 2);
-        if (dist < minDist) {
-          minDist = dist;
-          closest = point;
-          closestIndex = index;
-        }
-      });
-
-      sortedSegments.push(closest);
-      remaining.splice(closestIndex, 1);
-    }
-
-    let svgPath = '';
-    const bounds = map.getBounds();
-    if (!bounds) continue;
-
-    sortedSegments.forEach(({ lat, lng }, i) => {
+    const path = new paper.Path();
+    segments.forEach(({ lat, lng }, i) => {
       const point = new google.maps.LatLng(lat, lng);
       const worldPoint = projection.fromLatLngToPoint(point);
-      const topRight = projection.fromLatLngToPoint(bounds.getNorthEast());
-      const bottomLeft = projection.fromLatLngToPoint(bounds.getSouthWest());
       
-      const scale = Math.pow(2, map.getZoom() || 0);
       const x = (worldPoint.x - bottomLeft.x) * scale;
       const y = (worldPoint.y - topRight.y) * scale;
       
-      // Normalize coordinates to SVG viewport
-      const normalizedX = (x / (topRight.x - bottomLeft.x) / scale) * width;
-      const normalizedY = (y / (bottomLeft.y - topRight.y) / scale) * height;
+      const normalizedX = (x / (topRight.x - bottomLeft.x) / scale) * 800;
+      const normalizedY = (y / (bottomLeft.y - topRight.y) / scale) * 600;
       
-      svgPath += `${i === 0 ? 'M' : 'L'} ${normalizedX.toFixed(2)} ${normalizedY.toFixed(2)} `;
+      if (i === 0) {
+        path.moveTo(new paper.Point(normalizedX, normalizedY));
+      } else {
+        path.lineTo(new paper.Point(normalizedX, normalizedY));
+      }
     });
 
-    if (svgPath) {
-      streets.push({
-        path: svgPath,
-        name: segments[0].name
-      });
-    }
+    path.smooth();
+    streets.push({
+      path: path.pathData,
+      name: segments[0].name
+    });
   }
 
   return streets;
@@ -132,11 +112,9 @@ export const downloadSVG = async (
   const svgContent = `<?xml version="1.0" encoding="UTF-8"?>
     <svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
       <style>
-        .boundary { fill: none; stroke: #000000; stroke-width: 2; }
         .street-path { stroke: #000000; stroke-width: 1.5; fill: none; }
         .street-name { font-family: Arial; font-size: 10px; fill: #000000; }
       </style>
-      <path class="boundary" d="${boundaryPath}"/>
       ${streets.map((street, i) => `
         <g class="street">
           <path class="street-path" d="${street.path}"/>
@@ -172,24 +150,28 @@ export const polygonToSVGPath = (polygon: google.maps.Polygon): string => {
   const bounds = map.getBounds();
   if (!bounds) return '';
   
+  // Initialize Paper.js for the polygon path
+  paper.setup(new paper.Size(800, 600));
+  const paperPath = new paper.Path();
+  
   const topRight = projection.fromLatLngToPoint(bounds.getNorthEast());
   const bottomLeft = projection.fromLatLngToPoint(bounds.getSouthWest());
   const scale = Math.pow(2, map.getZoom() || 0);
-  const width = 800;
-  const height = 600;
   
-  let svgPoints = '';
   path.forEach((point, i) => {
     const worldPoint = projection.fromLatLngToPoint(point);
     const x = (worldPoint.x - bottomLeft.x) * scale;
     const y = (worldPoint.y - topRight.y) * scale;
     
-    // Normalize coordinates to SVG viewport
-    const normalizedX = (x / (topRight.x - bottomLeft.x) / scale) * width;
-    const normalizedY = (y / (bottomLeft.y - topRight.y) / scale) * height;
+    const normalizedX = (x / (topRight.x - bottomLeft.x) / scale) * 800;
+    const normalizedY = (y / (bottomLeft.y - topRight.y) / scale) * 600;
     
-    svgPoints += `${i === 0 ? 'M' : 'L'} ${normalizedX.toFixed(2)} ${normalizedY.toFixed(2)} `;
+    if (i === 0) {
+      paperPath.moveTo(new paper.Point(normalizedX, normalizedY));
+    } else {
+      paperPath.lineTo(new paper.Point(normalizedX, normalizedY));
+    }
   });
   
-  return svgPoints + 'Z';
+  return paperPath.pathData;
 };
