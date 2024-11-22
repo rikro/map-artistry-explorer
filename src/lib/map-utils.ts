@@ -5,8 +5,8 @@ export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: goo
   const ne = bounds.getNorthEast();
   const sw = bounds.getSouthWest();
   
-  // Create a much denser grid of points
-  const gridSize = 50; // Significantly increased for better coverage
+  // Create an even denser grid of points for better street detection
+  const gridSize = 100; // Increased for better coverage
   const latStep = (ne.lat() - sw.lat()) / gridSize;
   const lngStep = (ne.lng() - sw.lng()) / gridSize;
   
@@ -23,11 +23,10 @@ export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: goo
   const service = new google.maps.places.PlacesService(map);
   const roadSegments = new Map<string, Array<{lat: number, lng: number, name: string}>>();
   
-  // Process points to get street data with actual coordinates
   for (const point of points) {
     const request = {
       location: point,
-      radius: 30, // Reduced radius for even more precise street detection
+      radius: 20, // Reduced radius for more precise detection
       types: ['route']
     };
 
@@ -59,15 +58,18 @@ export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: goo
     }
   }
 
-  // Convert road segments to SVG paths
+  // Convert road segments to SVG paths using the map's projection
   const width = 800;
   const height = 600;
   const streets: Array<{path: string, name: string}> = [];
 
+  const projection = map.getProjection();
+  if (!projection) return streets;
+
   for (const segments of roadSegments.values()) {
     if (segments.length < 2) continue;
 
-    // Sort points by distance to create continuous paths
+    // Sort points to create continuous paths
     const sortedSegments = [segments[0]];
     let remaining = segments.slice(1);
 
@@ -91,10 +93,24 @@ export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: goo
     }
 
     let svgPath = '';
+    const bounds = map.getBounds();
+    if (!bounds) continue;
+
     sortedSegments.forEach(({ lat, lng }, i) => {
-      const x = ((lng - sw.lng()) / (ne.lng() - sw.lng())) * width;
-      const y = height - ((lat - sw.lat()) / (ne.lat() - sw.lat())) * height;
-      svgPath += `${i === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)} `;
+      const point = new google.maps.LatLng(lat, lng);
+      const worldPoint = projection.fromLatLngToPoint(point);
+      const topRight = projection.fromLatLngToPoint(bounds.getNorthEast());
+      const bottomLeft = projection.fromLatLngToPoint(bounds.getSouthWest());
+      
+      const scale = Math.pow(2, map.getZoom() || 0);
+      const x = (worldPoint.x - bottomLeft.x) * scale;
+      const y = (worldPoint.y - topRight.y) * scale;
+      
+      // Normalize coordinates to SVG viewport
+      const normalizedX = (x / (topRight.x - bottomLeft.x) / scale) * width;
+      const normalizedY = (y / (bottomLeft.y - topRight.y) / scale) * height;
+      
+      svgPath += `${i === 0 ? 'M' : 'L'} ${normalizedX.toFixed(2)} ${normalizedY.toFixed(2)} `;
     });
 
     if (svgPath) {
@@ -116,9 +132,11 @@ export const downloadSVG = async (
   const svgContent = `<?xml version="1.0" encoding="UTF-8"?>
     <svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
       <style>
+        .boundary { fill: none; stroke: #000000; stroke-width: 2; }
         .street-path { stroke: #000000; stroke-width: 1.5; fill: none; }
         .street-name { font-family: Arial; font-size: 10px; fill: #000000; }
       </style>
+      <path class="boundary" d="${boundaryPath}"/>
       ${streets.map((street, i) => `
         <g class="street">
           <path class="street-path" d="${street.path}"/>
@@ -145,20 +163,32 @@ export const downloadSVG = async (
 
 export const polygonToSVGPath = (polygon: google.maps.Polygon): string => {
   const path = polygon.getPath();
-  const bounds = new google.maps.LatLngBounds();
+  const map = polygon.getMap();
+  if (!map) return '';
   
-  path.forEach((point) => bounds.extend(point));
+  const projection = map.getProjection();
+  if (!projection) return '';
   
-  const ne = bounds.getNorthEast();
-  const sw = bounds.getSouthWest();
+  const bounds = map.getBounds();
+  if (!bounds) return '';
+  
+  const topRight = projection.fromLatLngToPoint(bounds.getNorthEast());
+  const bottomLeft = projection.fromLatLngToPoint(bounds.getSouthWest());
+  const scale = Math.pow(2, map.getZoom() || 0);
   const width = 800;
   const height = 600;
   
   let svgPoints = '';
   path.forEach((point, i) => {
-    const x = ((point.lng() - sw.lng()) / (ne.lng() - sw.lng())) * width;
-    const y = height - ((point.lat() - sw.lat()) / (ne.lat() - sw.lat())) * height;
-    svgPoints += `${i === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)} `;
+    const worldPoint = projection.fromLatLngToPoint(point);
+    const x = (worldPoint.x - bottomLeft.x) * scale;
+    const y = (worldPoint.y - topRight.y) * scale;
+    
+    // Normalize coordinates to SVG viewport
+    const normalizedX = (x / (topRight.x - bottomLeft.x) / scale) * width;
+    const normalizedY = (y / (bottomLeft.y - topRight.y) / scale) * height;
+    
+    svgPoints += `${i === 0 ? 'M' : 'L'} ${normalizedX.toFixed(2)} ${normalizedY.toFixed(2)} `;
   });
   
   return svgPoints + 'Z';
