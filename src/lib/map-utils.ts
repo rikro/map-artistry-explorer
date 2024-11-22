@@ -5,8 +5,8 @@ export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: goo
   const ne = bounds.getNorthEast();
   const sw = bounds.getSouthWest();
   
-  // Create a denser grid of points for better street detection
-  const gridSize = 10;
+  // Create a denser grid of points
+  const gridSize = 20; // Increased for better coverage
   const latStep = (ne.lat() - sw.lat()) / gridSize;
   const lngStep = (ne.lng() - sw.lng()) / gridSize;
   
@@ -21,13 +21,13 @@ export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: goo
   }
   
   const service = new google.maps.places.PlacesService(map);
-  const roadSegments = new Map<string, Array<{point: google.maps.LatLng, name: string}>>();
+  const roadSegments = new Map<string, Array<{lat: number, lng: number, name: string}>>();
   
-  // Process points to get street data
+  // Process points to get street data with actual coordinates
   for (const point of points) {
     const request = {
       location: point,
-      radius: 100, // Increased radius for better street detection
+      radius: 50, // Reduced radius for more precise street detection
       types: ['route']
     };
 
@@ -47,7 +47,8 @@ export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: goo
         if (place.place_id) {
           const segments = roadSegments.get(place.place_id) || [];
           segments.push({
-            point,
+            lat: point.lat(),
+            lng: point.lng(),
             name: place.name || 'Unknown Street'
           });
           roadSegments.set(place.place_id, segments);
@@ -66,13 +67,33 @@ export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: goo
   for (const segments of roadSegments.values()) {
     if (segments.length < 2) continue;
 
-    // Sort points to create a continuous path
-    segments.sort((a, b) => a.point.lng() - b.point.lng());
+    // Sort points by distance to create continuous paths
+    const sortedSegments = [segments[0]];
+    let remaining = segments.slice(1);
+
+    while (remaining.length > 0) {
+      const current = sortedSegments[sortedSegments.length - 1];
+      let closest = remaining[0];
+      let closestIndex = 0;
+      let minDist = Number.MAX_VALUE;
+
+      remaining.forEach((point, index) => {
+        const dist = Math.pow(point.lat - current.lat, 2) + Math.pow(point.lng - current.lng, 2);
+        if (dist < minDist) {
+          minDist = dist;
+          closest = point;
+          closestIndex = index;
+        }
+      });
+
+      sortedSegments.push(closest);
+      remaining.splice(closestIndex, 1);
+    }
 
     let svgPath = '';
-    segments.forEach(({ point }, i) => {
-      const x = ((point.lng() - sw.lng()) / (ne.lng() - sw.lng())) * width;
-      const y = height - ((point.lat() - sw.lat()) / (ne.lat() - sw.lat())) * height;
+    sortedSegments.forEach(({ lat, lng }, i) => {
+      const x = ((lng - sw.lng()) / (ne.lng() - sw.lng())) * width;
+      const y = height - ((lat - sw.lat()) / (ne.lat() - sw.lat())) * height;
       svgPath += `${i === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)} `;
     });
 
@@ -95,10 +116,9 @@ export const downloadSVG = async (
   const svgContent = `
     <svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
       <style>
-        .street-path { stroke: #000000; stroke-width: 2; fill: none; }
-        .street-name { font-family: Arial; font-size: 12px; fill: #000000; }
+        .street-path { stroke: #000000; stroke-width: 1.5; fill: none; }
+        .street-name { font-family: Arial; font-size: 10px; fill: #000000; }
       </style>
-      <path d="${boundaryPath}" fill="none" stroke="#000000" stroke-width="2"/>
       ${streets.map((street, i) => `
         <g class="street">
           <path class="street-path" d="${street.path}"/>
