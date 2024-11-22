@@ -5,8 +5,8 @@ export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: goo
   const ne = bounds.getNorthEast();
   const sw = bounds.getSouthWest();
   
-  // Create a denser grid of points
-  const gridSize = 20; // Increased for better coverage
+  // Create a much denser grid of points
+  const gridSize = 50; // Significantly increased for better coverage
   const latStep = (ne.lat() - sw.lat()) / gridSize;
   const lngStep = (ne.lng() - sw.lng()) / gridSize;
   
@@ -27,7 +27,7 @@ export const getStreetsInPolygon = async (polygon: google.maps.Polygon, map: goo
   for (const point of points) {
     const request = {
       location: point,
-      radius: 50, // Reduced radius for more precise street detection
+      radius: 30, // Reduced radius for even more precise street detection
       types: ['route']
     };
 

@@ -3,6 +3,7 @@ import { Pencil, X, Download } from 'lucide-react';
 
 interface MapControlsProps {
   isDrawingMode: boolean;
+  isExporting: boolean;
   onStartDrawing: () => void;
   onStopDrawing: () => void;
   onExport: () => void;
@@ -10,6 +11,7 @@ interface MapControlsProps {
 
 const MapControls = ({
   isDrawingMode,
+  isExporting,
   onStartDrawing,
   onStopDrawing,
   onExport,
@@ -38,10 +40,18 @@ const MapControls = ({
       <Button
         variant="default"
         onClick={onExport}
-        className="rounded-full"
+        disabled={isExporting}
+        className={`rounded-full relative overflow-hidden transition-all ${
+          isExporting ? 'animate-pulse' : ''
+        }`}
       >
-        <Download className="h-4 w-4 mr-2" />
-        Export Design
+        <span className={`flex items-center ${isExporting ? 'opacity-50' : ''}`}>
+          <Download className="h-4 w-4 mr-2" />
+          {isExporting ? 'Exporting Design' : 'Export Design'}
+        </span>
+        {isExporting && (
+          <span className="absolute inset-0 bg-primary/20 animate-[progress_2s_ease-in-out_infinite]" />
+        )}
       </Button>
     </div>
   );

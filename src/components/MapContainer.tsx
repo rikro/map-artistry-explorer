@@ -13,6 +13,7 @@ const MapContainer = ({ center, onMapLoad }: MapContainerProps) => {
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [drawingManager, setDrawingManager] = useState<google.maps.drawing.DrawingManager | null>(null);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [currentPolygon, setCurrentPolygon] = useState<google.maps.Polygon | null>(null);
 
   const handleMapLoad = useCallback((map: google.maps.Map) => {
@@ -42,6 +43,7 @@ const MapContainer = ({ center, onMapLoad }: MapContainerProps) => {
       return;
     }
 
+    setIsExporting(true);
     try {
       const svgPath = polygonToSVGPath(currentPolygon);
       const streets = await getStreetsInPolygon(currentPolygon, map);
@@ -49,6 +51,8 @@ const MapContainer = ({ center, onMapLoad }: MapContainerProps) => {
       toast.success('Design exported successfully!');
     } catch (error) {
       toast.error('Failed to export design');
+    } finally {
+      setIsExporting(false);
     }
   }, [currentPolygon, map]);
 
@@ -86,6 +90,7 @@ const MapContainer = ({ center, onMapLoad }: MapContainerProps) => {
 
       <MapControls
         isDrawingMode={isDrawingMode}
+        isExporting={isExporting}
         onStartDrawing={startDrawing}
         onStopDrawing={stopDrawing}
         onExport={exportSVG}
