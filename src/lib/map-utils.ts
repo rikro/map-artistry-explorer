@@ -113,7 +113,7 @@ export const downloadSVG = async (
   filename: string,
   streets: Array<{path: string, name: string}>
 ) => {
-  const svgContent = `
+  const svgContent = `<?xml version="1.0" encoding="UTF-8"?>
     <svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
       <style>
         .street-path { stroke: #000000; stroke-width: 1.5; fill: none; }
@@ -130,8 +130,7 @@ export const downloadSVG = async (
           <path id="street-path-${i}" d="${street.path}" style="display: none;"/>
         </g>
       `).join('')}
-    </svg>
-  `;
+    </svg>`;
   
   const blob = new Blob([svgContent], { type: 'image/svg+xml' });
   const url = URL.createObjectURL(blob);
