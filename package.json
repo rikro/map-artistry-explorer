@@ -62,7 +62,8 @@
     "tailwind-merge": "^2.5.2",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.3",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "unused-dependency": "^1.0.0" // Remove this if not used
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
@@ -81,6 +82,7 @@
     "tailwindcss": "^3.4.11",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.0.1",
-    "vite": "^5.4.1"
+    "vite": "^5.4.1",
+    "outdated-dependency": "^1.0.0" // Update this to the latest version
   }
 }
